@@ -188,3 +188,7 @@ func decodeStream(sd *StreamDict) error {
 
 	return nil
 }
+
+func EncodeStream(sd *StreamDict) error {
+        return encodeStream(sd)
+}
