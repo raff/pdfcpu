@@ -190,5 +190,5 @@ func decodeStream(sd *StreamDict) error {
 }
 
 func EncodeStream(sd *StreamDict) error {
-        return encodeStream(sd)
+	return encodeStream(sd)
 }
