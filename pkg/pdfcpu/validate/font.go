@@ -34,19 +34,27 @@ func validateFontFile3SubType(sd *pdf.StreamDict, fontType string) error {
 
 	dictSubType := sd.Subtype()
 
-	if fontType == "Type1" || fontType == "MMType1" {
+	switch fontType {
+	case "Type1":
+		if dictSubType == nil {
+			return errors.New("pdfcpu: validateFontFile3SubType: FontFile3 missing Subtype")
+		}
+
+		if *dictSubType != "Type1C" && *dictSubType != "OpenType" {
+			return errors.Errorf("pdfcpu: validateFontFile3SubType: FontFile3 unexpected Subtype %q", *dictSubType)
+		}
+
+	case "MMType1":
 		if dictSubType == nil || *dictSubType != "Type1C" {
 			return errors.New("pdfcpu: validateFontFile3SubType: FontFile3 missing Subtype \"Type1C\"")
 		}
-	}
 
-	if fontType == "CIDFontType0" {
+	case "CIDFontType0":
 		if dictSubType == nil || *dictSubType != "CIDFontType0C" {
 			return errors.New("pdfcpu: validateFontFile3SubType: FontFile3 missing Subtype \"CIDFontType0C\"")
 		}
-	}
 
-	if fontType == "OpenType" {
+	case "OpenType":
 		if dictSubType == nil || *dictSubType != "OpenType" {
 			return errors.New("pdfcpu: validateFontFile3SubType: FontFile3 missing Subtype \"OpenType\"")
 		}
