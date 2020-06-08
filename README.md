@@ -26,6 +26,7 @@ This is an effort to build a comprehensive PDF processing library from the groun
   <kbd><a href="https://pdfcpu.io/core/watermark"><img src="resources/wmi4.png" height="150"></a></kbd>&nbsp;<br><br>
   <kbd><a href="https://pdfcpu.io/core/stamp"><img src="resources/stp.png" height="150"></a></kbd>&nbsp;
   <kbd><a href="https://pdfcpu.io/core/grid"><img src="resources/gridimg.png" height="150"></a></kbd>
+  <kbd><a href="https://pdfcpu.io/core/stamp"><img src="resources/stRoundBorder.png" height="150"></a></kbd>
 </p>
 
 ## Focus
@@ -94,7 +95,7 @@ Get the latest binary [here](https://github.com/pdfcpu/pdfcpu/releases).
 
 ### Using GOPATH
 
-Required go version for building: go1.13 and up
+Required go version for building: go1.14 and up
 
 ```
 go get github.com/pdfcpu/pdfcpu/cmd/...
@@ -109,18 +110,16 @@ pdfcpu version
 git clone https://github.com/pdfcpu/pdfcpu
 cd pdfcpu/cmd/pdfcpu
 go install
-pdfcpu ve
+pdfcpu version
 ```
 
-## Note
-We transferred this repo to the [pdfcpu organisation](https://github.com/pdfcpu).
-All links to the previous repository location are automatically redirected to the new location.
-However, to avoid confusion, we strongly recommend updating any existing local clones to point to the new repository URL. You can do this by using git remote on the command line:
+### Using Homebrew (macOS)
 ```
-git remote set-url origin https://github.com/pdfcpu/pdfcpu
+brew install pdfcpu
+pdfcpu version
 ```
 
-## Using Docker
+### Run in a Docker container
 
 ```
 docker build -t pdfcpu .
