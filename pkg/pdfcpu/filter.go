@@ -192,3 +192,7 @@ func decodeStream(sd *StreamDict) error {
 func EncodeStream(sd *StreamDict) error {
 	return encodeStream(sd)
 }
+
+func DecodeStream(sd *StreamDict) error {
+	return decodeStream(sd)
+}
