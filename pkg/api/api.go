@@ -48,22 +48,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-func stringSet(slice []string) pdf.StringSet {
-	strSet := pdf.StringSet{}
-	if slice == nil {
-		return strSet
-	}
-	for _, s := range slice {
-		strSet[s] = true
-	}
-	return strSet
-}
-
 func logOperationStats(ctx *pdf.Context, op string, durRead, durVal, durOpt, durWrite, durTotal float64) {
 	log.Stats.Printf("XRefTable:\n%s\n", ctx)
 	pdf.TimingStats(op, durRead, durVal, durOpt, durWrite, durTotal)
-	ctx.Read.LogStats(ctx.Optimized)
-	ctx.Write.LogStats()
+	if ctx.Read.FileSize > 0 {
+		ctx.Read.LogStats(ctx.Optimized)
+		ctx.Write.LogStats()
+	}
 }
 
 // ReadContext uses an io.ReadSeeker to build an internal structure holding its cross reference table aka the Context.
@@ -152,6 +143,9 @@ func OptimizeContext(ctx *pdf.Context) error {
 
 // WriteContext writes a PDF context to w.
 func WriteContext(ctx *pdf.Context, w io.Writer) error {
+	if f, ok := w.(*os.File); ok {
+		ctx.Write.Fp = f
+	}
 	ctx.Write.Writer = bufio.NewWriter(w)
 	return pdf.Write(ctx)
 }
@@ -240,8 +234,11 @@ func Validate(rs io.ReadSeeker, conf *pdf.Configuration) error {
 
 	log.Stats.Printf("XRefTable:\n%s\n", ctx)
 	pdf.ValidationTimingStats(dur1, dur2, dur)
+
 	// at this stage: no binary breakup available!
-	ctx.Read.LogStats(ctx.Optimized)
+	if ctx.Read.FileSize > 0 {
+		ctx.Read.LogStats(ctx.Optimized)
+	}
 
 	return err
 }
@@ -512,10 +509,10 @@ func SetPermissionsFile(inFile, outFile string, conf *pdf.Configuration) (err er
 	return SetPermissions(f1, f2, conf)
 }
 
-func selectedPageRange(from, thru int) pdf.IntSet {
-	s := pdf.IntSet{}
-	for i := from; i <= thru; i++ {
-		s[i] = true
+func selectedPageRange(from, thru int) []int {
+	s := make([]int, thru-from+1)
+	for i := 0; i < len(s); i++ {
+		s[i] = from + i
 	}
 	return s
 }
@@ -531,15 +528,28 @@ func spanFileName(fileName string, from, thru int) string {
 }
 
 func writeSpan(ctx *pdf.Context, from, thru int, outDir, fileName string, forBookmark bool) error {
-	ctx.ResetWriteContext()
-	w := ctx.Write
-	w.SelectedPages = selectedPageRange(from, thru)
+
+	selectedPages := selectedPageRange(from, thru)
+
+	ctxDest, err := pdf.CreateContextWithXRefTable(nil, pdf.PaperSize["A4"])
+	if err != nil {
+		return err
+	}
+
+	usePgCache := false
+	if err := pdf.AddPages(ctx, ctxDest, selectedPages, usePgCache); err != nil {
+		return err
+	}
+
+	w := ctxDest.Write
 	w.DirName = outDir
 	w.FileName = fileName + ".pdf"
 	if !forBookmark {
 		w.FileName = spanFileName(fileName, from, thru)
+		//log.CLI.Printf("writing to: <%s>\n", w.FileName)
 	}
-	return pdf.Write(ctx)
+
+	return pdf.Write(ctxDest)
 }
 
 type bookmark struct {
@@ -809,8 +819,8 @@ func Trim(rs io.ReadSeeker, w io.Writer, selectedPages []string, conf *pdf.Confi
 	if err != nil {
 		return err
 	}
-	ctx.Write.SelectedPages = pages
 
+	ctx.Write.SelectedPages = pages
 	if err = WriteContext(ctx, w); err != nil {
 		return err
 	}
@@ -965,6 +975,8 @@ func WatermarkContext(ctx *pdf.Context, selectedPages pdf.IntSet, wm *pdf.Waterm
 }
 
 // AddWatermarks adds watermarks to all pages selected in rs and writes the result to w.
+// Called by AddWatermarksFile or manually by passing in wm created by
+// calling TextWatermark, ImageWatermark or PDFWatermark.
 func AddWatermarks(rs io.ReadSeeker, w io.Writer, selectedPages []string, wm *pdf.Watermark, conf *pdf.Configuration) error {
 	if conf == nil {
 		conf = pdf.NewDefaultConfiguration()
@@ -1018,6 +1030,9 @@ func AddWatermarks(rs io.ReadSeeker, w io.Writer, selectedPages []string, wm *pd
 }
 
 // AddWatermarksFile adds watermarks to all selected pages of inFile and writes the result to outFile.
+// Called by:
+// AddTextWatermarksFile, AddImageWatermarksFile, AddPDFWatermarksFile
+// UpdateTextWatermarksFile, UpdateImageWatermarksFile, UpdatePDFWatermarksFile
 func AddWatermarksFile(inFile, outFile string, selectedPages []string, wm *pdf.Watermark, conf *pdf.Configuration) (err error) {
 	var f1, f2 *os.File
 
@@ -1442,7 +1457,7 @@ func InsertPages(rs io.ReadSeeker, w io.Writer, selectedPages []string, before b
 		return err
 	}
 
-	if err = ctx.InsertPages(pages, before); err != nil {
+	if err = ctx.InsertBlankPages(pages, before); err != nil {
 		return err
 	}
 
@@ -1900,4 +1915,31 @@ func CollectFile(inFile, outFile string, selectedPages []string, conf *pdf.Confi
 	}()
 
 	return Collect(f1, f2, selectedPages, conf)
+}
+
+// GetPermissions returns the permissions for rs.
+func GetPermissions(rs io.ReadSeeker, conf *pdf.Configuration) (*int16, error) {
+	if conf == nil {
+		conf = pdf.NewDefaultConfiguration()
+	}
+	ctx, _, _, err := readAndValidate(rs, conf, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	if ctx.E == nil {
+		// Full access - permissions don't apply.
+		return nil, nil
+	}
+	p := int16(ctx.E.P)
+	return &p, nil
+}
+
+// GetPermissionsFile returns the permissions for inFile.
+func GetPermissionsFile(inFile string, conf *pdf.Configuration) (*int16, error) {
+	f, err := os.Open(inFile)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return GetPermissions(f, conf)
 }
